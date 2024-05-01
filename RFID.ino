@@ -7,7 +7,7 @@
 
 MFRC522 rfid(SS_PIN, RST_PIN);
 
-const char* host = "groep5-A.local"; //pi adres
+const char* host = "10.42.0.1"; //pi adres
 const int port = 8080; //port van server
 
 void setup() {
@@ -17,8 +17,8 @@ void setup() {
 
   Serial.println(F("Starting..."));
 
-  WiFi.begin("NSELab", "NSELabWiFi"); // probeer te verbinden met de wifi
-  Serial.println("Connecting to NSE WiFi");
+  WiFi.begin("pigroep5A", "pigroep5A"); // probeer te verbinden met de wifi
+  Serial.println("Connecting to Pi WiFi");
   while (WiFi.status() != WL_CONNECTED) // wacht totdat hij is verbonden
   {
     delay(500);
@@ -56,9 +56,6 @@ void loop() {
   Serial.print(F("In hex: "));
   printHex(rfid.uid.uidByte, rfid.uid.size);
   Serial.println();
-  Serial.print(F("In dec: "));
-  printDec(rfid.uid.uidByte, rfid.uid.size);
-  Serial.println();
 
   rfid.PICC_HaltA();
 
@@ -78,7 +75,7 @@ void sendHttpRequest() {
   }
 
   // maak http request met tag data
-  String url = "/tag?data=";
+  String url = "/rfid/tag?data=";
   for (byte i = 0; i < rfid.uid.size; i++) {
     if (rfid.uid.uidByte[i] < 0x10) {
       url += "0";
@@ -87,7 +84,7 @@ void sendHttpRequest() {
   }
 
   // stuur http request
-  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+  client.print(String("POST ") + url + " HTTP/1.1\r\n" +
                "Host: " + host + "\r\n" +
                "Connection: close\r\n\r\n");
   delay(10);
@@ -100,12 +97,5 @@ void printHex(byte *buffer, byte bufferSize) {
   for (byte i = 0; i < bufferSize; i++) {
     Serial.print(buffer[i] < 0x10 ? " 0" : " ");
     Serial.print(buffer[i], HEX);
-  }
-}
-
-void printDec(byte *buffer, byte bufferSize) {
-  for (byte i = 0; i < bufferSize; i++) {
-    Serial.print(' ');
-    Serial.print(buffer[i], DEC);
   }
 }
