@@ -2,14 +2,22 @@
 #include <MFRC522.h>
 #include <ESP8266WiFi.h>
 
-#define SS_PIN D2 //sda pin
-#define RST_PIN D0 //pin verbonden met rst
+#define SS_PIN D2 // SDA pin
+#define RST_PIN D0 // Pin verbonden met RST
 
 MFRC522 rfid(SS_PIN, RST_PIN);
 
-const char* host = "10.42.0.1"; //pi adres
-const int port = 8080; //port van server
+const char* ssid = "pigroep5"; // SSID van het WiFi-netwerk
+const char* pass = "pigroep5"; // Wachtwoord van het WiFi-netwerk
+const char* host = "10.0.10.1"; // IP-adres van de Pi
+const int port = 8080; // Poort van de server
 
+/**
+ * @brief Setup.
+ * 
+ * Initialisatie van seriële communicatie, SPI en de MFRC522 RFID-module.
+ * Verbinding maken met WiFi-netwerk.
+ */
 void setup() {
   Serial.begin(9600);
   SPI.begin();
@@ -17,55 +25,38 @@ void setup() {
 
   Serial.println(F("Starting..."));
 
-  WiFi.begin("pigroep5A", "pigroep5A"); // probeer te verbinden met de wifi
-  Serial.println("Connecting to Pi WiFi");
-  while (WiFi.status() != WL_CONNECTED) // wacht totdat hij is verbonden
-  {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println();
-
-  Serial.print("Connected, IP address: ");
-  Serial.println(WiFi.localIP());
+  connectWiFi();
+  
   Serial.println("Now scanning for RFID cards!");
 }
 
+/**
+ * @brief Loop.
+ * 
+ * Als er een nieuwe RFID-kaart wordt gedetecteerd, wordt de ID uitgelezen en doorgestuurd naar de server die op de Pi draait.
+ */
 void loop() {
-  // reset loop wanneer er geen nieuwe kaart wordt gelezen.
+  // Reset loop als er geen nieuwe kaart wordt gedetecteerd
   if (!rfid.PICC_IsNewCardPresent())
     return;
-
 
   if (!rfid.PICC_ReadCardSerial())
     return;
 
-  Serial.print(F("PICC type: "));
-  MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
-  Serial.println(rfid.PICC_GetTypeName(piccType));
-
-  if (piccType != MFRC522::PICC_TYPE_MIFARE_MINI &&
-      piccType != MFRC522::PICC_TYPE_MIFARE_1K &&
-      piccType != MFRC522::PICC_TYPE_MIFARE_4K) {
-    Serial.println(F("Your tag is not of type MIFARE Classic."));
-    return;
-  }
-
   Serial.println(F("A card has been detected."));
-  Serial.println(F("The NUID tag is:"));
-  Serial.print(F("In hex: "));
+  Serial.println(F("The NUID tag in hex is:"));
   printHex(rfid.uid.uidByte, rfid.uid.size);
   Serial.println();
 
   rfid.PICC_HaltA();
-
   rfid.PCD_StopCrypto1();
 
   sendHttpRequest();
-
-  delay(500);
 }
 
+/**
+ * @brief Functie om een HTTP-verzoek naar de server te sturen met de RFID-gegevens.
+ */
 void sendHttpRequest() {
   WiFiClient client;
 
@@ -74,7 +65,7 @@ void sendHttpRequest() {
     return;
   }
 
-  // maak http request met tag data
+  // Maak HTTP-verzoek met tagdata
   String url = "/rfid/tag?data=";
   for (byte i = 0; i < rfid.uid.size; i++) {
     if (rfid.uid.uidByte[i] < 0x10) {
@@ -83,7 +74,7 @@ void sendHttpRequest() {
     url += String(rfid.uid.uidByte[i], HEX);
   }
 
-  // stuur http request
+  // Stuur HTTP-verzoek
   client.print(String("POST ") + url + " HTTP/1.1\r\n" +
                "Host: " + host + "\r\n" +
                "Connection: close\r\n\r\n");
@@ -93,6 +84,31 @@ void sendHttpRequest() {
   Serial.println(F("HTTP request sent to server"));
 }
 
+/**
+ * @brief Functie om verbinding te maken met het WiFi-netwerk.
+ * 
+ * Deze functie probeert verbinding te maken met het WiFi-netwerk en wacht tot de verbinding tot stand is gebracht.
+ */
+void connectWiFi() {
+  WiFi.begin(ssid, pass); // Probeer verbinding te maken met het WiFi-netwerk.
+  Serial.println("Connecting to Pi WiFi");
+  while (WiFi.status() != WL_CONNECTED) // Wacht tot verbonden.
+  {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+
+  Serial.print("Connected, IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+/**
+ * @brief Functie om gegevens in hexadecimale vorm af te drukken.
+ * 
+ * @param buffer Een array met bytes die afgedrukt moeten worden.
+ * @param bufferSize De grootte van de buffer.
+ */
 void printHex(byte *buffer, byte bufferSize) {
   for (byte i = 0; i < bufferSize; i++) {
     Serial.print(buffer[i] < 0x10 ? " 0" : " ");
